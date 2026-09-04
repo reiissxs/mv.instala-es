@@ -613,6 +613,24 @@ tbody tr:hover td{background:#F8FAFD!important;}
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important;}
 }
 
+
+
+/* MOBILE SECURITY + APP-SHELL HARDENING */
+html,body{width:100%;max-width:100%;min-height:100%;overflow-x:hidden;overscroll-behavior-x:none;-webkit-text-size-adjust:100%;touch-action:pan-y;}
+body{position:relative;}
+#app-loading.hidden,#login.hidden,#admin.hidden,#employee.hidden{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;min-height:0!important;overflow:hidden!important;}
+#app-loading:not(.hidden),#login:not(.hidden),#admin:not(.hidden),#employee:not(.hidden){visibility:visible;pointer-events:auto;}
+@media (max-width:820px){
+  html,body{overscroll-behavior:none;}
+  #admin.hidden,#employee.hidden,#login.hidden,#app-loading.hidden{display:none!important;}
+  #employee:not(.hidden){display:block!important;width:100%!important;min-height:100dvh!important;overflow-x:hidden!important;}
+  #admin:not(.hidden){display:block!important;width:100%!important;min-height:100dvh!important;overflow-x:hidden!important;}
+  #login:not(.hidden){display:block!important;width:100%!important;min-height:100dvh!important;overflow-x:hidden!important;}
+  input,select,textarea,button{font-size:16px;}
+  .emp-body,.admin-content{max-width:100vw!important;overflow-x:hidden!important;}
+  .modal-bg{overscroll-behavior:contain;}
+}
+
 </style>
 </head>
 <body>
@@ -817,8 +835,22 @@ function closeModal(){ document.getElementById('modal-bg').classList.remove('sho
 
 // ─── SHOW/HIDE SCREENS ─────────────────────────────────────────────────────
 function showScreen(id){
-  ['app-loading','login','admin','employee'].forEach(s=>{ const el=document.getElementById(s); if(el) el.className=(s===id?'':'hidden'); });
-  if(id==='login') document.getElementById('login').className='';
+  // Isolamento rígido entre as interfaces: somente UMA tela pode existir visualmente por vez.
+  if(id==='admin' && (!state.user || state.user.role!=='admin')) id='login';
+  if(id==='employee' && (!state.user || state.user.role!=='employee' || !state.emp)) id='login';
+
+  ['app-loading','login','admin','employee'].forEach(s=>{
+    const el=document.getElementById(s);
+    if(!el) return;
+    const active = s===id;
+    el.classList.toggle('hidden', !active);
+    el.setAttribute('aria-hidden', active ? 'false' : 'true');
+    el.style.display = active ? '' : 'none';
+  });
+
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  window.scrollTo(0,0);
 }
 
 // ─── LOGIN ─────────────────────────────────────────────────────────────────
@@ -987,6 +1019,8 @@ function logout(){
 
 // ─── ADMIN ─────────────────────────────────────────────────────────────────
 async function initAdmin(){
+  if(!state.user || state.user.role!=='admin'){ logout(); return; }
+  state.emp = null;
   document.getElementById('sb-user-name').textContent = state.user.full_name;
   showScreen('admin');
   await loadAdminEmployees();
@@ -1003,6 +1037,7 @@ function toggleSidebar(){
 }
 
 function setAdminPage(page){
+  if(!state.user || state.user.role!=='admin') return;
   state.adminPage = page;
   document.querySelectorAll('.sb-item').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
   const titles = {efetivo:'Efetivo',funcionarios:'Funcionários',tarefas:'Tarefas',relatorios:'Relatórios'};
@@ -1453,6 +1488,7 @@ async function deleteTask(taskId, empId, dirId, canCreate, isAdmin){
 
 // ─── FUNCIONÁRIO ───────────────────────────────────────────────────────────
 function initEmployee(){
+  if(!state.user || state.user.role!=='employee' || !state.emp){ logout(); return; }
   const emp = state.emp; const now = new Date();
   const h = now.getHours();
   document.getElementById('emp-greet').textContent = (h<12?'Bom dia':h<18?'Boa tarde':'Boa noite')+',';
@@ -1463,6 +1499,7 @@ function initEmployee(){
 }
 
 function setEmpTab(tab){
+  if(!state.user || state.user.role!=='employee' || !state.emp) return;
   state.empTab = tab;
   ['presenca','tarefas','saldo'].forEach(t=>{
     const el = document.getElementById('tab-'+t);
