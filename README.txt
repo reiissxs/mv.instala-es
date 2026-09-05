@@ -1,14 +1,11 @@
-MV Instalações Hidráulicas — Vercel
+MV INSTALAÇÕES HIDRÁULICAS
+VERSÃO COM FERRAMENTAS + GASTOS + MOBILE SEGURO
 
-Arquivos:
-- index.html: aplicação principal
-- vercel.json: configuração básica da Vercel
+VERCEL:
+1. ENVIE ESTA PASTA/ZIP PARA A VERCEL.
+2. FRAMEWORK PRESET: OTHER.
+3. NÃO É NECESSÁRIO BUILD COMMAND.
+4. INDEX.HTML É A ENTRADA PRINCIPAL.
 
-Hospedagem:
-1. Envie esta pasta para um repositório GitHub ou faça upload/importação do projeto na Vercel.
-2. Framework Preset: Other
-3. Build Command: deixe vazio
-4. Output Directory: deixe vazio
-5. Deploy
-
-Observação: o app é HTML/CSS/JS estático e não precisa de build.
+OBSERVAÇÃO:
+FERRAMENTAS E GASTOS ESTÃO SALVOS TEMPORARIAMENTE NO NAVEGADOR (LOCALSTORAGE), SEM ALTERAR O BANCO.

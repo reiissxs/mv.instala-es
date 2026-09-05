@@ -685,6 +685,12 @@ body{position:relative;}
       <button class="sb-item" onclick="setAdminPage('tarefas')" data-page="tarefas">
         <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12a9 9 0 1 1-5.3-8.2"/></svg></span><span class="sb-label">Tarefas</span>
       </button>
+      <button class="sb-item" onclick="setAdminPage('ferramentas')" data-page="ferramentas">
+        <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-2.4 2.4-2.1-2.1a4 4 0 0 0 5 5L20 16.4a2.1 2.1 0 0 1-3 3l-7.7-7.7"/></svg></span><span class="sb-label">Ferramentas</span>
+      </button>
+      <button class="sb-item" onclick="setAdminPage('gastos')" data-page="gastos">
+        <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h4M6 9h5"/></svg></span><span class="sb-label">Gastos</span>
+      </button>
       <button class="sb-item" onclick="setAdminPage('relatorios')" data-page="relatorios">
         <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg></span><span class="sb-label">Relatórios</span>
       </button>
@@ -794,6 +800,18 @@ function todayStr(){ return new Date().toISOString().split('T')[0]; }
 function fmtDate(d){ if(!d) return '-'; const p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTime(iso){ if(!iso) return ''; return new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
 function fmtBRL(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v)||0); }
+function parseBRLInput(v){
+  const raw=String(v||'').replace(/[^\d]/g,'');
+  return raw ? Number(raw)/100 : 0;
+}
+function formatBRLInput(el){
+  const n=parseBRLInput(el.value);
+  el.value=fmtBRL(n).replace(/\s/g,'');
+}
+function escHtml(v){ return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+function getMVLocal(key){ try{return JSON.parse(localStorage.getItem(key)||'[]')}catch(e){return []} }
+function setMVLocal(key,val){ localStorage.setItem(key,JSON.stringify(val)); }
+
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const WDAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const WFULL=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -1040,7 +1058,7 @@ function setAdminPage(page){
   if(!state.user || state.user.role!=='admin') return;
   state.adminPage = page;
   document.querySelectorAll('.sb-item').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
-  const titles = {efetivo:'Efetivo',funcionarios:'Funcionários',tarefas:'Tarefas',relatorios:'Relatórios'};
+  const titles = {efetivo:'Efetivo',funcionarios:'Funcionários',tarefas:'Tarefas',ferramentas:'Ferramentas',gastos:'Gastos',relatorios:'Relatórios'};
   document.getElementById('admin-title').textContent = titles[page]||page;
   renderAdminPage(page);
 }
@@ -1051,6 +1069,8 @@ function renderAdminPage(page){
   if(page==='efetivo') renderEfetivo(c);
   else if(page==='funcionarios') renderFuncionariosPage(c);
   else if(page==='tarefas') renderTarefasAdmin(c);
+  else if(page==='ferramentas') renderFerramentas(c);
+  else if(page==='gastos') renderGastos(c);
   else if(page==='relatorios') renderRelatorios(c);
 }
 
@@ -1289,6 +1309,108 @@ function renderSelectedEmpTasks(){
   renderTaskList(document.getElementById('tasks-area-inner'), sel, state.user.id, true, true);
 }
 
+// ── FERRAMENTAS (DIRETOR) ─────────────────────────────────────────────────
+const MV_TOOLS_KEY='mv_local_tools_v1';
+const MV_EXPENSES_KEY='mv_local_expenses_v1';
+
+function renderFerramentas(container){
+  if(!state.user || state.user.role!=='admin') return;
+  const tools=getMVLocal(MV_TOOLS_KEY).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const counts={ativa:0,desativada:0,conserto:0}; tools.forEach(t=>counts[t.status]=(counts[t.status]||0)+1);
+  container.innerHTML=`
+    <div class="module-head">
+      <div><h2>CONTROLE DE FERRAMENTAS</h2><p>CADASTRE E ACOMPANHE O ESTADO DE CADA FERRAMENTA.</p></div>
+      <button class="btn btn-primary" onclick="openToolModal()">+ NOVA FERRAMENTA</button>
+    </div>
+    <div class="stats-grid" style="margin-bottom:18px">
+      <div class="stat-card"><span class="stat-label">TOTAL</span><div class="stat-value">${tools.length}</div></div>
+      <div class="stat-card"><span class="stat-label">ATIVAS</span><div class="stat-value" style="color:var(--ok)">${counts.ativa||0}</div></div>
+      <div class="stat-card"><span class="stat-label">DESATIVADAS</span><div class="stat-value" style="color:var(--muted)">${counts.desativada||0}</div></div>
+      <div class="stat-card"><span class="stat-label">EM CONSERTO</span><div class="stat-value" style="color:var(--warn)">${counts.conserto||0}</div></div>
+    </div>
+    ${tools.length?`<div class="tool-grid">${tools.map(t=>`
+      <div class="tool-card">
+        <div class="tool-top"><div><div class="tool-name">${escHtml(t.name)}</div><div class="tool-code">${escHtml(t.code||'SEM IDENTIFICAÇÃO')}</div></div><span class="status-pill status-tool-${t.status}">${t.status==='ativa'?'ATIVA':t.status==='desativada'?'DESATIVADA':'CONSERTO'}</span></div>
+        ${t.observation?`<div style="font-size:10px;color:var(--muted);margin-top:12px;line-height:1.5">${escHtml(t.observation)}</div>`:''}
+        <div style="display:flex;gap:7px;margin-top:14px"><button class="btn btn-secondary btn-sm" onclick="openToolModal('${t.id}')">EDITAR</button><button class="btn btn-danger btn-sm" onclick="deleteTool('${t.id}')">EXCLUIR</button></div>
+      </div>`).join('')}</div>`:`<div class="card empty-center"><div style="font-size:32px;margin-bottom:8px">🛠️</div><p>NENHUMA FERRAMENTA CADASTRADA.</p></div>`}`;
+}
+
+function openToolModal(id){
+  const tools=getMVLocal(MV_TOOLS_KEY); const t=tools.find(x=>x.id===id)||{};
+  openModal(id?'EDITAR FERRAMENTA':'NOVA FERRAMENTA',`
+    <div class="field"><label>NOME DA FERRAMENTA *</label><input id="tool-name" value="${escHtml(t.name||'')}" placeholder="EX: MARTELETE"></div>
+    <div class="field"><label>IDENTIFICAÇÃO / PATRIMÔNIO</label><input id="tool-code" value="${escHtml(t.code||'')}" placeholder="EX: MV-001"></div>
+    <div class="field"><label>ESTADO *</label><select id="tool-status"><option value="ativa" ${t.status==='ativa'?'selected':''}>ATIVA</option><option value="desativada" ${t.status==='desativada'?'selected':''}>DESATIVADA</option><option value="conserto" ${t.status==='conserto'?'selected':''}>CONSERTO</option></select></div>
+    <div class="field"><label>OBSERVAÇÃO</label><textarea id="tool-obs" rows="3" placeholder="OBSERVAÇÃO OPCIONAL">${escHtml(t.observation||'')}</textarea></div>
+    <div id="tool-err" class="err-box hidden"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveTool('${id||''}')">SALVAR</button></div>`);
+}
+function saveTool(id){
+  if(!state.user || state.user.role!=='admin') return;
+  const name=document.getElementById('tool-name').value.trim().toUpperCase();
+  const code=document.getElementById('tool-code').value.trim().toUpperCase();
+  const status=document.getElementById('tool-status').value;
+  const observation=document.getElementById('tool-obs').value.trim().toUpperCase();
+  const er=document.getElementById('tool-err'); if(!name){er.textContent='INFORME O NOME DA FERRAMENTA.';er.classList.remove('hidden');return;}
+  const list=getMVLocal(MV_TOOLS_KEY); const now=new Date().toISOString();
+  if(id){const i=list.findIndex(x=>x.id===id); if(i>=0)list[i]={...list[i],name,code,status,observation,updated_at:now};}
+  else list.push({id:'tool_'+Date.now(),name,code,status,observation,created_at:now,updated_at:now});
+  setMVLocal(MV_TOOLS_KEY,list); closeModal(); showToast('FERRAMENTA SALVA!'); renderAdminPage('ferramentas');
+}
+function deleteTool(id){
+  if(!state.user || state.user.role!=='admin') return;
+  if(!confirm('EXCLUIR ESTA FERRAMENTA?'))return;
+  setMVLocal(MV_TOOLS_KEY,getMVLocal(MV_TOOLS_KEY).filter(x=>x.id!==id)); showToast('FERRAMENTA EXCLUÍDA.'); renderAdminPage('ferramentas');
+}
+
+// ── GASTOS (DIRETOR) ─────────────────────────────────────────────────────
+function renderGastos(container){
+  if(!state.user || state.user.role!=='admin') return;
+  const expenses=getMVLocal(MV_EXPENSES_KEY).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const sum=type=>expenses.filter(x=>x.type===type).reduce((a,x)=>a+Number(x.value||0),0);
+  const total=expenses.reduce((a,x)=>a+Number(x.value||0),0);
+  const empTotals={}; expenses.filter(x=>x.type==='funcionario'&&x.employee_id).forEach(x=>empTotals[x.employee_id]=(empTotals[x.employee_id]||0)+Number(x.value||0));
+  const empWithCost=sortByFirst(adminEmployees.filter(e=>empTotals[e.id]>0));
+  container.innerHTML=`
+    <div class="module-head"><div><h2>CONTROLE DE GASTOS</h2><p>PROJEÇÃO DE MEDIÇÕES, PAGAMENTOS DE FUNCIONÁRIOS E OUTROS GASTOS.</p></div><button class="btn btn-primary" onclick="openExpenseModal()">+ NOVO GASTO</button></div>
+    <div class="expense-stats">
+      <div class="expense-stat"><div class="lbl">GASTO TOTAL</div><div class="money-hero">${fmtBRL(total)}</div></div>
+      <div class="expense-stat"><div class="lbl">MEDIÇÕES</div><div class="money-hero">${fmtBRL(sum('medicao'))}</div></div>
+      <div class="expense-stat"><div class="lbl">FUNCIONÁRIOS</div><div class="money-hero">${fmtBRL(sum('funcionario'))}</div></div>
+      <div class="expense-stat"><div class="lbl">OUTROS</div><div class="money-hero">${fmtBRL(sum('outro'))}</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><h3 style="margin:0;color:var(--navy);font-size:14px">PAGAMENTO PREVISTO POR FUNCIONÁRIO</h3>
+      ${empWithCost.length?`<div class="emp-cost-list">${empWithCost.map(e=>`<div class="emp-cost-item"><div><div style="font-size:11px;font-weight:800;color:var(--navy)">${escHtml(e.full_name)}</div><div style="font-size:9px;color:var(--muted);margin-top:2px">${escHtml(e.cargo||'FUNCIONÁRIO')}</div></div><strong style="font-size:13px;color:var(--navy)">${fmtBRL(empTotals[e.id])}</strong></div>`).join('')}</div>`:`<div style="font-size:11px;color:var(--muted);margin-top:12px">NENHUM PAGAMENTO DE FUNCIONÁRIO CADASTRADO.</div>`}
+    </div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0;color:var(--navy);font-size:14px">LANÇAMENTOS</h3><span class="tag">${expenses.length} REGISTROS</span></div>
+      ${expenses.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>TIPO</th><th>DESCRIÇÃO</th><th>FUNCIONÁRIO</th><th>VALOR</th><th></th></tr></thead><tbody>${expenses.map(x=>{const emp=adminEmployees.find(e=>e.id===x.employee_id);return `<tr><td>${x.type==='medicao'?'MEDIÇÃO':x.type==='funcionario'?'FUNCIONÁRIO':'OUTRO'}</td><td>${escHtml(x.description)}</td><td>${emp?escHtml(emp.full_name):'-'}</td><td><strong>${fmtBRL(x.value)}</strong></td><td><button class="task-btn task-btn-del" onclick="deleteExpense('${x.id}')">🗑</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-center"><div style="font-size:30px;margin-bottom:8px">💳</div><p>NENHUM GASTO CADASTRADO.</p></div>`}
+    </div>`;
+}
+function openExpenseModal(){
+  const emps=sortByFirst(adminEmployees.filter(e=>e.status==='ativo'));
+  openModal('NOVO GASTO',`
+    <div class="field"><label>TIPO DE GASTO *</label><select id="exp-type" onchange="toggleExpenseEmployee()"><option value="medicao">MEDIÇÃO</option><option value="funcionario">PAGAMENTO DE FUNCIONÁRIO</option><option value="outro">OUTRO GASTO</option></select></div>
+    <div class="field hidden" id="exp-emp-field"><label>FUNCIONÁRIO *</label><select id="exp-emp"><option value="">— SELECIONE —</option>${emps.map(e=>`<option value="${e.id}">${escHtml(e.full_name)}</option>`).join('')}</select></div>
+    <div class="field"><label>DESCRIÇÃO *</label><input id="exp-desc" placeholder="EX: MEDIÇÃO DA OBRA / PAGAMENTO SEMANAL"></div>
+    <div class="field"><label>VALOR *</label><input id="exp-value" type="text" inputmode="numeric" placeholder="R$0,00" oninput="formatBRLInput(this)"></div>
+    <div id="exp-err" class="err-box hidden"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveExpense()">SALVAR GASTO</button></div>`);
+}
+function toggleExpenseEmployee(){const f=document.getElementById('exp-emp-field'); if(f)f.classList.toggle('hidden',document.getElementById('exp-type').value!=='funcionario');}
+function saveExpense(){
+  if(!state.user || state.user.role!=='admin') return;
+  const type=document.getElementById('exp-type').value; const employee_id=document.getElementById('exp-emp').value;
+  const description=document.getElementById('exp-desc').value.trim().toUpperCase(); const value=parseBRLInput(document.getElementById('exp-value').value); const er=document.getElementById('exp-err');
+  if(!description||value<=0||(type==='funcionario'&&!employee_id)){er.textContent='PREENCHA TODOS OS CAMPOS OBRIGATÓRIOS.';er.classList.remove('hidden');return;}
+  const list=getMVLocal(MV_EXPENSES_KEY); list.push({id:'exp_'+Date.now(),type,employee_id:type==='funcionario'?employee_id:'',description,value,created_at:new Date().toISOString()});
+  setMVLocal(MV_EXPENSES_KEY,list); closeModal(); showToast('GASTO CADASTRADO!'); renderAdminPage('gastos');
+}
+function deleteExpense(id){
+  if(!state.user || state.user.role!=='admin') return; if(!confirm('EXCLUIR ESTE GASTO?'))return;
+  setMVLocal(MV_EXPENSES_KEY,getMVLocal(MV_EXPENSES_KEY).filter(x=>x.id!==id)); showToast('GASTO EXCLUÍDO.'); renderAdminPage('gastos');
+}
+
 // ── RELATÓRIOS ──
 function renderRelatorios(container){
   const sorted = sortByFirst(adminEmployees.filter(e=>e.status==='ativo'));
@@ -1445,7 +1567,7 @@ function openCreateTask(empId, dirId){
   openModal('Nova Tarefa', `
     <div class="field"><label>Funcionário</label><input type="text" disabled value="${(adminEmployees.find(e=>e.id===empId)||{}).full_name||empId}"></div>
     <div class="field"><label>Descrição *</label><input id="ct-desc" placeholder="Ex: Pintar o shaft..."></div>
-    <div class="field"><label>Valor (R$) *</label><input id="ct-val" type="number" placeholder="250.00" step="0.01"></div>
+    <div class="field"><label>Valor (R$) *</label><input id="ct-val" type="text" inputmode="numeric" placeholder="R$0,00" oninput="formatBRLInput(this)"></div>
     <div class="field"><label>Status inicial</label><input type="text" value="Em andamento" disabled></div>
     <div id="ct-err" class="err-box hidden"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -1456,11 +1578,12 @@ function openCreateTask(empId, dirId){
 
 async function saveTask(empId, dirId){
   const desc = document.getElementById('ct-desc').value.trim();
-  const val  = document.getElementById('ct-val').value;
+  const valRaw = document.getElementById('ct-val').value;
+  const val = parseBRLInput(valRaw);
   const errEl = document.getElementById('ct-err');
-  if(!desc||!val){ errEl.textContent='Preencha todos os campos.'; errEl.classList.remove('hidden'); return; }
+  if(!desc||val<=0){ errEl.textContent='Preencha todos os campos.'; errEl.classList.remove('hidden'); return; }
   try {
-    await dbPost('mv_tasks',{employee_id:empId,director_id:dirId,description:desc,value:parseFloat(val),status:'pendente'});
+    await dbPost('mv_tasks',{employee_id:empId,director_id:dirId,description:desc,value:val,status:'pendente'});
     closeModal(); showToast('Tarefa criada!');
     const area = document.getElementById('tasks-area-inner')||document.getElementById('emp-det-tasks');
     if(area) renderTaskList(area, empId, dirId, true, true);
@@ -1633,7 +1756,42 @@ async function generatePDF(empId){
     table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}th{background:#1B3A7A;color:white;padding:8px 12px;text-align:left;font-size:11px}td{padding:7px 12px;border-bottom:1px solid #E2E8F0}tr:nth-child(even) td{background:#F8FAFC}
     .p{color:#22C55E;font-weight:700}.f{color:#EF4444;font-weight:700}.pe{color:#F59E0B;font-weight:700}
     .footer{margin-top:24px;padding-top:12px;border-top:2px solid #1B3A7A;display:flex;justify-content:space-between;font-size:11px;color:#64748B}
-    @media print{body{padding:16px}}</style></head><body>
+    @media print{body{padding:16px}}
+/* ── REGRAS GLOBAIS MV ───────────────────────────────────────────── */
+html,body,#login,#admin,#employee,#modal-bg{ text-transform:uppercase; }
+input,select,textarea,button{ text-transform:uppercase; }
+input::placeholder,textarea::placeholder{ text-transform:uppercase; }
+.money-hero{font-size:28px;font-weight:850;letter-spacing:-.8px;color:var(--navy);margin-top:5px;}
+.module-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;}
+.module-head h2{margin:0;font-size:22px;font-weight:850;color:var(--navy);letter-spacing:-.45px;}
+.module-head p{margin:5px 0 0;color:var(--muted);font-size:12px;font-weight:600;}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:12px;}
+.tool-card{background:#fff;border:1px solid var(--bdr);border-radius:16px;padding:16px;box-shadow:0 7px 22px rgba(25,40,75,.05);}
+.tool-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tool-name{font-size:14px;font-weight:800;color:var(--navy);}
+.tool-code{font-size:10px;color:var(--muted);font-weight:700;margin-top:3px;}
+.status-pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:9px;font-weight:850;letter-spacing:.6px;}
+.status-tool-ativa{background:#EAF8F0;color:#177245;}
+.status-tool-desativada{background:#F0F2F5;color:#606978;}
+.status-tool-conserto{background:#FFF2DB;color:#9A5A00;}
+.expense-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;}
+.expense-stat{background:#fff;border:1px solid var(--bdr);border-radius:16px;padding:16px;box-shadow:0 7px 22px rgba(25,40,75,.05);}
+.expense-stat .lbl{font-size:9px;letter-spacing:.7px;font-weight:800;color:var(--muted);}
+.expense-table{width:100%;border-collapse:collapse;}
+.expense-table th{font-size:9px;letter-spacing:.65px;color:var(--muted);text-align:left;padding:10px;border-bottom:1px solid var(--bdr);}
+.expense-table td{padding:12px 10px;border-bottom:1px solid var(--bdr);font-size:11px;font-weight:650;color:#33405A;vertical-align:middle;}
+.expense-table td:last-child,.expense-table th:last-child{text-align:right;}
+.emp-cost-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px;}
+.emp-cost-item{border:1px solid var(--bdr);border-radius:13px;padding:13px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+@media(max-width:800px){
+ .expense-stats{grid-template-columns:1fr 1fr;}
+ .module-head{flex-direction:column;}
+ .module-head .btn{width:100%;justify-content:center;}
+ .tool-grid{grid-template-columns:1fr;}
+ .expense-table{min-width:660px;}
+ .expense-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+}
+</style></head><body>
     <div class="hdr"><div><div class="logo">MV✓</div><div class="ls">INSTALAÇÕES HIDRÁULICAS</div></div>
     <div style="text-align:right"><div style="font-size:15px;font-weight:700;color:#1B3A7A">RELATÓRIO INDIVIDUAL</div><div style="font-size:12px;color:#64748B">${period}</div></div></div>
     <div class="info"><h2>${emp.full_name}</h2><p>@${emp.username}${emp.cargo?' · '+emp.cargo:''} · ${(emp.status||'ativo').toUpperCase()}</p></div>
