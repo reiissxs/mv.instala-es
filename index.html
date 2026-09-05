@@ -631,6 +631,101 @@ body{position:relative;}
   .modal-bg{overscroll-behavior:contain;}
 }
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MV — PADRÃO VISUAL GLOBAL / MAIÚSCULAS
+   ═══════════════════════════════════════════════════════════════════════════ */
+html,body,#login,#admin,#employee,#modal-bg,
+.sidebar,.admin-main,.emp-main,.modal,.card,.toast {
+  text-transform: uppercase;
+}
+input,select,textarea,button,option {
+  text-transform: uppercase !important;
+}
+input::placeholder,textarea::placeholder {
+  text-transform: uppercase !important;
+}
+
+/* CABEÇALHO DOS MÓDULOS ADMIN */
+.module-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:24px;
+  margin:0 0 22px;
+  width:100%;
+}
+.module-head > div:first-child{min-width:0;flex:1;}
+.module-head h2{
+  margin:0;
+  font-size:24px;
+  line-height:1.1;
+  font-weight:850;
+  color:var(--navy);
+  letter-spacing:-.55px;
+  text-transform:uppercase;
+}
+.module-head p{
+  margin:7px 0 0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.45;
+  font-weight:650;
+  letter-spacing:.15px;
+  text-transform:uppercase;
+}
+.module-head > .btn{
+  flex:0 0 auto;
+  width:auto;
+  min-height:44px;
+  margin:0;
+  white-space:nowrap;
+  align-self:flex-end;
+}
+
+.money-hero{font-size:28px;font-weight:850;letter-spacing:-.8px;color:var(--navy);margin-top:5px;}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:12px;}
+.tool-card{background:#fff;border:1px solid var(--bdr);border-radius:16px;padding:16px;box-shadow:0 7px 22px rgba(25,40,75,.05);}
+.tool-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tool-name{font-size:14px;font-weight:800;color:var(--navy);text-transform:uppercase;}
+.tool-code{font-size:10px;color:var(--muted);font-weight:700;margin-top:3px;text-transform:uppercase;}
+.status-pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:9px;font-weight:850;letter-spacing:.6px;text-transform:uppercase;}
+.status-tool-ativa{background:#EAF8F0;color:#177245;}
+.status-tool-desativada{background:#F0F2F5;color:#606978;}
+.status-tool-conserto{background:#FFF2DB;color:#9A5A00;}
+.expense-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;}
+.expense-stat{background:#fff;border:1px solid var(--bdr);border-radius:16px;padding:16px;box-shadow:0 7px 22px rgba(25,40,75,.05);}
+.expense-stat .lbl{font-size:9px;letter-spacing:.7px;font-weight:800;color:var(--muted);text-transform:uppercase;}
+.expense-table{width:100%;border-collapse:collapse;}
+.expense-table th{font-size:9px;letter-spacing:.65px;color:var(--muted);text-align:left;padding:10px;border-bottom:1px solid var(--bdr);text-transform:uppercase;}
+.expense-table td{padding:12px 10px;border-bottom:1px solid var(--bdr);font-size:11px;font-weight:650;color:#33405A;vertical-align:middle;text-transform:uppercase;}
+.expense-table td:last-child,.expense-table th:last-child{text-align:right;}
+.emp-cost-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px;}
+.emp-cost-item{border:1px solid var(--bdr);border-radius:13px;padding:13px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;text-transform:uppercase;}
+
+/* GARANTE QUE NOMES E CONTEÚDO DINÂMICO TAMBÉM APAREÇAM EM MAIÚSCULO */
+#admin-content *,#employee-content *,#access-cards *,#modal-bg *{text-transform:uppercase;}
+
+@media(max-width:800px){
+  .expense-stats{grid-template-columns:1fr 1fr;}
+  .module-head{
+    flex-direction:column;
+    align-items:stretch;
+    gap:14px;
+    margin-bottom:18px;
+  }
+  .module-head > .btn{
+    width:100%;
+    justify-content:center;
+    align-self:stretch;
+  }
+  .module-head h2{font-size:21px;}
+  .module-head p{font-size:11px;}
+  .tool-grid{grid-template-columns:1fr;}
+  .expense-table{min-width:660px;}
+  .expense-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+}
 </style>
 </head>
 <body>
@@ -1747,7 +1842,7 @@ async function generatePDF(empId){
     const period= MONTHS[now.getMonth()]+' '+now.getFullYear();
 
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório ${emp.full_name}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#1E293B;padding:32px}
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#1E293B;padding:32px;text-transform:uppercase}
     .hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:16px;border-bottom:3px solid #1B3A7A;margin-bottom:20px}
     .logo{font-family:"Arial Black",sans-serif;font-size:28px;font-weight:900;color:#1B3A7A}.ls{font-size:9px;color:#8B9AB8;letter-spacing:2px;font-weight:700;margin-top:2px}
     .info{background:#EEF2FA;border-radius:10px;padding:14px 18px;margin-bottom:18px}.info h2{font-size:18px;color:#1B3A7A;margin-bottom:3px}.info p{font-size:12px;color:#64748B}
