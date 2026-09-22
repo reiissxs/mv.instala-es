@@ -783,8 +783,11 @@ input::placeholder,textarea::placeholder {
       <button class="sb-item" onclick="setAdminPage('ferramentas')" data-page="ferramentas">
         <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-2.4 2.4-2.1-2.1a4 4 0 0 0 5 5L20 16.4a2.1 2.1 0 0 1-3 3l-7.7-7.7"/></svg></span><span class="sb-label">Ferramentas</span>
       </button>
+      <button class="sb-item" onclick="setAdminPage('medicoes')" data-page="medicoes">
+        <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M8 7h8M8 11h8M8 15h5"/><path d="M2 21h20"/></svg></span><span class="sb-label">MEDIÇÕES</span>
+      </button>
       <button class="sb-item" onclick="setAdminPage('gastos')" data-page="gastos">
-        <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h4M6 9h5"/></svg></span><span class="sb-label">Gastos</span>
+        <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h4M6 9h5"/></svg></span><span class="sb-label">GASTOS</span>
       </button>
       <button class="sb-item" onclick="setAdminPage('relatorios')" data-page="relatorios">
         <span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg></span><span class="sb-label">Relatórios</span>
@@ -848,47 +851,27 @@ input::placeholder,textarea::placeholder {
 
 <script>
 // ─── CONFIG ────────────────────────────────────────────────────────────────
-const SB  = 'https://oietojrjfibcmarrdwyp.supabase.co';
-const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pZXRvanJqZmliY21hcnJkd3lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4ODY3MjksImV4cCI6MjA5ODQ2MjcyOX0.cw-SQvVs0hD_FkF4tM4XdztQDosnKPmMeVG9MueaXck';
+const API = '/api/db';
 
-// Senha padrão temporária definida apenas no HTML. O banco NÃO é alterado.
+// Senha padrão temporária definida apenas no app.
 const DEFAULT_ACCESS_PASSWORD = '1234';
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let state = { user:null, emp:null, directors:[], employees:[], adminPage:'efetivo', empTab:'presenca', selEmp:null, efeitoInterval:null };
 
-// ─── API ───────────────────────────────────────────────────────────────────
-function hdrs(extra){ return Object.assign({ apikey:KEY, Authorization:'Bearer '+KEY, 'Content-Type':'application/json' }, extra||{}); }
-
-async function dbGet(table, params){
-  const url = new URL(SB+'/rest/v1/'+table);
+// ─── API NEON (via backend Vercel; credencial nunca fica no navegador) ─────
+async function apiReq(method, table, params, body){
+  const url = new URL(API+'/'+table, location.origin);
   if(params) Object.keys(params).forEach(k=>url.searchParams.set(k,String(params[k])));
-  const r = await fetch(url, {headers:hdrs()});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:body===undefined?undefined:JSON.stringify(body)});
+  const text = await r.text();
+  if(!r.ok) throw new Error(text || ('HTTP '+r.status));
+  return text ? JSON.parse(text) : [];
 }
-
-async function dbPost(table, body){
-  const r = await fetch(SB+'/rest/v1/'+table, {method:'POST', headers:hdrs({Prefer:'return=representation'}), body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
-async function dbPatch(table, filter, body){
-  const url = new URL(SB+'/rest/v1/'+table);
-  Object.keys(filter).forEach(k=>url.searchParams.set(k,String(filter[k])));
-  const r = await fetch(url, {method:'PATCH', headers:hdrs({Prefer:'return=representation'}), body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
-async function dbDelete(table, filter){
-  const url = new URL(SB+'/rest/v1/'+table);
-  Object.keys(filter).forEach(k=>url.searchParams.set(k,String(filter[k])));
-  const r = await fetch(url, {method:'DELETE', headers:hdrs()});
-  if(!r.ok) throw new Error(await r.text());
-  return true;
-}
+async function dbGet(table, params){ return apiReq('GET',table,params); }
+async function dbPost(table, body){ return apiReq('POST',table,null,body); }
+async function dbPatch(table, filter, body){ return apiReq('PATCH',table,filter,body); }
+async function dbDelete(table, filter){ await apiReq('DELETE',table,filter); return true; }
 
 // ─── UTILS ─────────────────────────────────────────────────────────────────
 function todayStr(){ return new Date().toISOString().split('T')[0]; }
@@ -905,7 +888,22 @@ function formatBRLInput(el){
 }
 function escHtml(v){ return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
 function getMVLocal(key){ try{return JSON.parse(localStorage.getItem(key)||'[]')}catch(e){return []} }
-function setMVLocal(key,val){ localStorage.setItem(key,JSON.stringify(val)); }
+function setMVLocal(key,val){
+  localStorage.setItem(key,JSON.stringify(val));
+  const map={mv_local_tools_v1:'mv_tools',mv_local_expenses_v1:'mv_expenses',mv_local_measurements_v1:'mv_measurements'};
+  if(map[key]) fetch('/api/sync/'+map[key],{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)}).catch(console.error);
+}
+async function hydrateNeonModules(){
+  const defs=[['mv_local_tools_v1','mv_tools'],['mv_local_expenses_v1','mv_expenses'],['mv_local_measurements_v1','mv_measurements']];
+  for(const [key,table] of defs){
+    try{
+      const rows=await dbGet(table,{order:'created_at.desc'});
+      const mapped=(rows||[]).map(x=>table==='mv_tools'?{...x,code:x.identification||''}:table==='mv_expenses'?{...x,type:x.category,created_at:x.expense_date?x.expense_date+'T12:00:00':x.created_at}:x);
+      localStorage.setItem(key,JSON.stringify(mapped));
+    }catch(e){ console.error('NEON HYDRATE',table,e); }
+  }
+}
+
 
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const WDAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -1153,7 +1151,7 @@ function setAdminPage(page){
   if(!state.user || state.user.role!=='admin') return;
   state.adminPage = page;
   document.querySelectorAll('.sb-item').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
-  const titles = {efetivo:'Efetivo',funcionarios:'Funcionários',tarefas:'Tarefas',ferramentas:'Ferramentas',gastos:'Gastos',relatorios:'Relatórios'};
+  const titles = {efetivo:'EFETIVO',funcionarios:'FUNCIONÁRIOS',tarefas:'TAREFAS',ferramentas:'FERRAMENTAS',medicoes:'MEDIÇÕES',gastos:'GASTOS',relatorios:'RELATÓRIOS'};
   document.getElementById('admin-title').textContent = titles[page]||page;
   renderAdminPage(page);
 }
@@ -1165,6 +1163,7 @@ function renderAdminPage(page){
   else if(page==='funcionarios') renderFuncionariosPage(c);
   else if(page==='tarefas') renderTarefasAdmin(c);
   else if(page==='ferramentas') renderFerramentas(c);
+  else if(page==='medicoes') renderMedicoes(c);
   else if(page==='gastos') renderGastos(c);
   else if(page==='relatorios') renderRelatorios(c);
 }
@@ -1407,6 +1406,7 @@ function renderSelectedEmpTasks(){
 // ── FERRAMENTAS (DIRETOR) ─────────────────────────────────────────────────
 const MV_TOOLS_KEY='mv_local_tools_v1';
 const MV_EXPENSES_KEY='mv_local_expenses_v1';
+const MV_MEASUREMENTS_KEY='mv_local_measurements_v1';
 
 function renderFerramentas(container){
   if(!state.user || state.user.role!=='admin') return;
@@ -1459,36 +1459,154 @@ function deleteTool(id){
   setMVLocal(MV_TOOLS_KEY,getMVLocal(MV_TOOLS_KEY).filter(x=>x.id!==id)); showToast('FERRAMENTA EXCLUÍDA.'); renderAdminPage('ferramentas');
 }
 
-// ── GASTOS (DIRETOR) ─────────────────────────────────────────────────────
+// ── MEDIÇÕES + GASTOS (FLUXO OBRIGATÓRIO) ────────────────────────────────
+function mvMonthKey(iso){
+  const d=iso?new Date(iso):new Date();
+  if(Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function currentMonthKey(){ return mvMonthKey(new Date().toISOString()); }
+function fmtDateBR(iso){
+  if(!iso) return '-';
+  const d=new Date(iso); if(Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR');
+}
+function migrateLegacyMeasurements(){
+  const measurements=getMVLocal(MV_MEASUREMENTS_KEY);
+  const expenses=getMVLocal(MV_EXPENSES_KEY);
+  const legacy=expenses.filter(x=>x.type==='medicao');
+  if(legacy.length){
+    legacy.forEach(x=>{
+      if(!measurements.some(m=>m.legacy_expense_id===x.id)) measurements.push({
+        id:'med_'+(x.id||Date.now()), legacy_expense_id:x.id,
+        description:String(x.description||'MEDIÇÃO').toUpperCase(), value:Number(x.value||0),
+        status:'concluida', created_at:x.created_at||new Date().toISOString(),
+        completed_at:x.created_at||new Date().toISOString(), updated_at:new Date().toISOString()
+      });
+    });
+    setMVLocal(MV_MEASUREMENTS_KEY,measurements);
+    setMVLocal(MV_EXPENSES_KEY,expenses.filter(x=>x.type!=='medicao'));
+  }
+  return measurements;
+}
+
+function renderMedicoes(container){
+  if(!state.user || state.user.role!=='admin') return;
+  const measurements=migrateLegacyMeasurements().sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const pending=measurements.filter(x=>x.status==='pendente');
+  const concluded=measurements.filter(x=>x.status==='concluida');
+  const month=currentMonthKey();
+  const concludedMonth=concluded.filter(x=>mvMonthKey(x.completed_at)===month);
+  const pendingTotal=pending.reduce((a,x)=>a+Number(x.value||0),0);
+  const monthTotal=concludedMonth.reduce((a,x)=>a+Number(x.value||0),0);
+  container.innerHTML=`
+    <div class="module-head"><div><h2>CONTROLE DE MEDIÇÕES</h2><p>CADASTRE AS MEDIÇÕES. PENDENTE VIRA FUTURO GASTO; CONCLUÍDA VIRA GASTO DO MÊS.</p></div><button class="btn btn-primary" onclick="openMeasurementModal()">+ NOVA MEDIÇÃO</button></div>
+    <div class="expense-stats">
+      <div class="expense-stat"><div class="lbl">TOTAL DE MEDIÇÕES</div><div class="money-hero">${measurements.length}</div></div>
+      <div class="expense-stat"><div class="lbl">PENDENTES</div><div class="money-hero" style="color:var(--warn)">${pending.length}</div></div>
+      <div class="expense-stat"><div class="lbl">FUTUROS GASTOS</div><div class="money-hero">${fmtBRL(pendingTotal)}</div></div>
+      <div class="expense-stat"><div class="lbl">GASTO DO MÊS</div><div class="money-hero" style="color:var(--success)">${fmtBRL(monthTotal)}</div></div>
+    </div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0;color:var(--navy);font-size:14px">MEDIÇÕES CADASTRADAS</h3><span class="tag">${measurements.length} REGISTROS</span></div>
+      ${measurements.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>DESCRIÇÃO</th><th>VALOR</th><th>STATUS</th><th>CADASTRADA</th><th>CONCLUÍDA</th><th>AÇÕES</th></tr></thead><tbody>${measurements.map(x=>`<tr><td><strong>${escHtml(x.description)}</strong></td><td><strong>${fmtBRL(x.value)}</strong></td><td><span class="status-pill ${x.status==='pendente'?'status-tool-conserto':'status-tool-ativa'}">${x.status==='pendente'?'PENDENTE':'CONCLUÍDA'}</span></td><td>${fmtDateBR(x.created_at)}</td><td>${x.status==='concluida'?fmtDateBR(x.completed_at):'-'}</td><td><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">${x.status==='pendente'?`<button class="btn btn-primary btn-sm" onclick="completeMeasurement('${x.id}')">CONCLUIR</button>`:''}<button class="btn btn-secondary btn-sm" onclick="openMeasurementModal('${x.id}')">EDITAR</button><button class="btn btn-danger btn-sm" onclick="deleteMeasurement('${x.id}')">EXCLUIR</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-center"><div style="font-size:30px;margin-bottom:8px">📋</div><p>NENHUMA MEDIÇÃO CADASTRADA.</p></div>`}
+    </div>`;
+}
+
+function openMeasurementModal(id){
+  if(!state.user || state.user.role!=='admin') return;
+  const list=migrateLegacyMeasurements(); const m=list.find(x=>x.id===id)||{};
+  openModal(id?'EDITAR MEDIÇÃO':'NOVA MEDIÇÃO',`
+    <div class="field"><label>DESCRIÇÃO DA MEDIÇÃO *</label><input id="med-desc" value="${escHtml(m.description||'')}" placeholder="EX: MEDIÇÃO OBRA VILA OLÍMPIA"></div>
+    <div class="field"><label>VALOR *</label><input id="med-value" type="text" inputmode="numeric" value="${m.value?fmtBRL(m.value):''}" placeholder="R$0,00" oninput="formatBRLInput(this)"></div>
+    <div class="field"><label>STATUS *</label><select id="med-status"><option value="pendente" ${m.status!=='concluida'?'selected':''}>PENDENTE</option><option value="concluida" ${m.status==='concluida'?'selected':''}>CONCLUÍDA</option></select></div>
+    <div style="font-size:10px;line-height:1.55;color:var(--muted);background:#F5F8FF;border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;margin-bottom:14px"><strong>REGRA AUTOMÁTICA:</strong> PENDENTE APARECE EM FUTUROS GASTOS. AO CONCLUIR, O VALOR PASSA AUTOMATICAMENTE PARA GASTO DO MÊS.</div>
+    <div id="med-err" class="err-box hidden"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveMeasurement('${id||''}')">SALVAR</button></div>`);
+}
+function saveMeasurement(id){
+  if(!state.user || state.user.role!=='admin') return;
+  const description=document.getElementById('med-desc').value.trim().toUpperCase();
+  const value=parseBRLInput(document.getElementById('med-value').value);
+  const status=document.getElementById('med-status').value;
+  const er=document.getElementById('med-err');
+  if(!description||value<=0){er.textContent='PREENCHA A DESCRIÇÃO E UM VALOR VÁLIDO.';er.classList.remove('hidden');return;}
+  const list=migrateLegacyMeasurements(); const now=new Date().toISOString();
+  if(id){
+    const i=list.findIndex(x=>x.id===id); if(i<0)return;
+    const old=list[i];
+    let completed_at=old.completed_at||null;
+    if(old.status!=='concluida'&&status==='concluida') completed_at=now;
+    if(status==='pendente') completed_at=null;
+    list[i]={...old,description,value,status,completed_at,updated_at:now};
+  } else {
+    list.push({id:'med_'+Date.now(),description,value,status,created_at:now,updated_at:now,completed_at:status==='concluida'?now:null});
+  }
+  setMVLocal(MV_MEASUREMENTS_KEY,list); closeModal(); showToast(status==='pendente'?'MEDIÇÃO SALVA COMO FUTURO GASTO!':'MEDIÇÃO CONCLUÍDA E LANÇADA NO GASTO DO MÊS!'); renderAdminPage('medicoes');
+}
+function completeMeasurement(id){
+  if(!state.user || state.user.role!=='admin') return;
+  const list=migrateLegacyMeasurements(); const i=list.findIndex(x=>x.id===id); if(i<0)return;
+  if(!confirm('CONCLUIR ESTA MEDIÇÃO? O VALOR SAIRÁ DE FUTUROS GASTOS E ENTRARÁ NO GASTO DO MÊS.'))return;
+  const now=new Date().toISOString(); list[i]={...list[i],status:'concluida',completed_at:now,updated_at:now};
+  setMVLocal(MV_MEASUREMENTS_KEY,list); showToast('MEDIÇÃO CONCLUÍDA! VALOR MOVIDO PARA GASTO DO MÊS.'); renderAdminPage('medicoes');
+}
+function deleteMeasurement(id){
+  if(!state.user || state.user.role!=='admin') return;
+  if(!confirm('EXCLUIR ESTA MEDIÇÃO?'))return;
+  setMVLocal(MV_MEASUREMENTS_KEY,migrateLegacyMeasurements().filter(x=>x.id!==id)); showToast('MEDIÇÃO EXCLUÍDA.'); renderAdminPage('medicoes');
+}
+
 function renderGastos(container){
   if(!state.user || state.user.role!=='admin') return;
-  const expenses=getMVLocal(MV_EXPENSES_KEY).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
-  const sum=type=>expenses.filter(x=>x.type===type).reduce((a,x)=>a+Number(x.value||0),0);
-  const total=expenses.reduce((a,x)=>a+Number(x.value||0),0);
-  const empTotals={}; expenses.filter(x=>x.type==='funcionario'&&x.employee_id).forEach(x=>empTotals[x.employee_id]=(empTotals[x.employee_id]||0)+Number(x.value||0));
+  const expenses=getMVLocal(MV_EXPENSES_KEY).filter(x=>x.type!=='medicao').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const measurements=migrateLegacyMeasurements();
+  const month=currentMonthKey();
+  const pendingMeasurements=measurements.filter(x=>x.status==='pendente');
+  const monthMeasurements=measurements.filter(x=>x.status==='concluida'&&mvMonthKey(x.completed_at)===month);
+  const monthExpenses=expenses.filter(x=>mvMonthKey(x.created_at)===month);
+  const futureTotal=pendingMeasurements.reduce((a,x)=>a+Number(x.value||0),0);
+  const measurementMonthTotal=monthMeasurements.reduce((a,x)=>a+Number(x.value||0),0);
+  const employeeMonthTotal=monthExpenses.filter(x=>x.type==='funcionario').reduce((a,x)=>a+Number(x.value||0),0);
+  const otherMonthTotal=monthExpenses.filter(x=>x.type==='outro').reduce((a,x)=>a+Number(x.value||0),0);
+  const monthTotal=measurementMonthTotal+employeeMonthTotal+otherMonthTotal;
+  const empTotals={}; monthExpenses.filter(x=>x.type==='funcionario'&&x.employee_id).forEach(x=>empTotals[x.employee_id]=(empTotals[x.employee_id]||0)+Number(x.value||0));
   const empWithCost=sortByFirst(adminEmployees.filter(e=>empTotals[e.id]>0));
   container.innerHTML=`
-    <div class="module-head"><div><h2>CONTROLE DE GASTOS</h2><p>PROJEÇÃO DE MEDIÇÕES, PAGAMENTOS DE FUNCIONÁRIOS E OUTROS GASTOS.</p></div><button class="btn btn-primary" onclick="openExpenseModal()">+ NOVO GASTO</button></div>
+    <div class="module-head"><div><h2>CONTROLE DE GASTOS</h2><p>OS VALORES DE MEDIÇÕES ENTRAM AUTOMATICAMENTE CONFORME O STATUS.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="setAdminPage('medicoes')">VER MEDIÇÕES</button><button class="btn btn-primary" onclick="openExpenseModal()">+ NOVO GASTO</button></div></div>
     <div class="expense-stats">
-      <div class="expense-stat"><div class="lbl">GASTO TOTAL</div><div class="money-hero">${fmtBRL(total)}</div></div>
-      <div class="expense-stat"><div class="lbl">MEDIÇÕES</div><div class="money-hero">${fmtBRL(sum('medicao'))}</div></div>
-      <div class="expense-stat"><div class="lbl">FUNCIONÁRIOS</div><div class="money-hero">${fmtBRL(sum('funcionario'))}</div></div>
-      <div class="expense-stat"><div class="lbl">OUTROS</div><div class="money-hero">${fmtBRL(sum('outro'))}</div></div>
+      <div class="expense-stat"><div class="lbl">GASTO DO MÊS</div><div class="money-hero">${fmtBRL(monthTotal)}</div></div>
+      <div class="expense-stat"><div class="lbl">FUTUROS GASTOS</div><div class="money-hero" style="color:var(--warn)">${fmtBRL(futureTotal)}</div></div>
+      <div class="expense-stat"><div class="lbl">FUNCIONÁRIOS NO MÊS</div><div class="money-hero">${fmtBRL(employeeMonthTotal)}</div></div>
+      <div class="expense-stat"><div class="lbl">OUTROS NO MÊS</div><div class="money-hero">${fmtBRL(otherMonthTotal)}</div></div>
     </div>
-    <div class="card" style="margin-bottom:16px"><h3 style="margin:0;color:var(--navy);font-size:14px">PAGAMENTO PREVISTO POR FUNCIONÁRIO</h3>
-      ${empWithCost.length?`<div class="emp-cost-list">${empWithCost.map(e=>`<div class="emp-cost-item"><div><div style="font-size:11px;font-weight:800;color:var(--navy)">${escHtml(e.full_name)}</div><div style="font-size:9px;color:var(--muted);margin-top:2px">${escHtml(e.cargo||'FUNCIONÁRIO')}</div></div><strong style="font-size:13px;color:var(--navy)">${fmtBRL(empTotals[e.id])}</strong></div>`).join('')}</div>`:`<div style="font-size:11px;color:var(--muted);margin-top:12px">NENHUM PAGAMENTO DE FUNCIONÁRIO CADASTRADO.</div>`}
+    <div class="card" style="margin-bottom:16px;border-left:4px solid var(--warn)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px"><div><h3 style="margin:0;color:var(--navy);font-size:14px">FUTUROS GASTOS — MEDIÇÕES PENDENTES</h3><p style="font-size:10px;color:var(--muted);margin:4px 0 0">AO CONCLUIR UMA MEDIÇÃO, ELA SAI AUTOMATICAMENTE DESTA LISTA.</p></div><strong style="font-size:15px;color:var(--warn)">${fmtBRL(futureTotal)}</strong></div>
+      ${pendingMeasurements.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>MEDIÇÃO</th><th>VALOR</th><th>STATUS</th><th>AÇÃO</th></tr></thead><tbody>${pendingMeasurements.map(x=>`<tr><td>${escHtml(x.description)}</td><td><strong>${fmtBRL(x.value)}</strong></td><td><span class="status-pill status-tool-conserto">PENDENTE</span></td><td><button class="btn btn-primary btn-sm" onclick="completeMeasurementFromExpenses('${x.id}')">CONCLUIR</button></td></tr>`).join('')}</tbody></table></div>`:`<div style="font-size:11px;color:var(--muted);padding:10px 0">NENHUMA MEDIÇÃO PENDENTE.</div>`}
     </div>
-    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0;color:var(--navy);font-size:14px">LANÇAMENTOS</h3><span class="tag">${expenses.length} REGISTROS</span></div>
-      ${expenses.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>TIPO</th><th>DESCRIÇÃO</th><th>FUNCIONÁRIO</th><th>VALOR</th><th></th></tr></thead><tbody>${expenses.map(x=>{const emp=adminEmployees.find(e=>e.id===x.employee_id);return `<tr><td>${x.type==='medicao'?'MEDIÇÃO':x.type==='funcionario'?'FUNCIONÁRIO':'OUTRO'}</td><td>${escHtml(x.description)}</td><td>${emp?escHtml(emp.full_name):'-'}</td><td><strong>${fmtBRL(x.value)}</strong></td><td><button class="task-btn task-btn-del" onclick="deleteExpense('${x.id}')">🗑</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-center"><div style="font-size:30px;margin-bottom:8px">💳</div><p>NENHUM GASTO CADASTRADO.</p></div>`}
+    <div class="card" style="margin-bottom:16px;border-left:4px solid var(--success)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px"><div><h3 style="margin:0;color:var(--navy);font-size:14px">GASTOS DO MÊS — MEDIÇÕES CONCLUÍDAS</h3><p style="font-size:10px;color:var(--muted);margin:4px 0 0">SOMENTE MEDIÇÕES CONCLUÍDAS NESTE MÊS.</p></div><strong style="font-size:15px;color:var(--success)">${fmtBRL(measurementMonthTotal)}</strong></div>
+      ${monthMeasurements.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>MEDIÇÃO</th><th>CONCLUÍDA EM</th><th>VALOR</th></tr></thead><tbody>${monthMeasurements.map(x=>`<tr><td>${escHtml(x.description)}</td><td>${fmtDateBR(x.completed_at)}</td><td><strong>${fmtBRL(x.value)}</strong></td></tr>`).join('')}</tbody></table></div>`:`<div style="font-size:11px;color:var(--muted);padding:10px 0">NENHUMA MEDIÇÃO CONCLUÍDA NESTE MÊS.</div>`}
+    </div>
+    <div class="card" style="margin-bottom:16px"><h3 style="margin:0;color:var(--navy);font-size:14px">PAGAMENTO DO MÊS POR FUNCIONÁRIO</h3>
+      ${empWithCost.length?`<div class="emp-cost-list">${empWithCost.map(e=>`<div class="emp-cost-item"><div><div style="font-size:11px;font-weight:800;color:var(--navy)">${escHtml(e.full_name)}</div><div style="font-size:9px;color:var(--muted);margin-top:2px">${escHtml(e.cargo||'FUNCIONÁRIO')}</div></div><strong style="font-size:13px;color:var(--navy)">${fmtBRL(empTotals[e.id])}</strong></div>`).join('')}</div>`:`<div style="font-size:11px;color:var(--muted);margin-top:12px">NENHUM PAGAMENTO DE FUNCIONÁRIO NESTE MÊS.</div>`}
+    </div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0;color:var(--navy);font-size:14px">OUTROS LANÇAMENTOS DO MÊS</h3><span class="tag">${monthExpenses.length} REGISTROS</span></div>
+      ${monthExpenses.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>TIPO</th><th>DESCRIÇÃO</th><th>FUNCIONÁRIO</th><th>VALOR</th><th></th></tr></thead><tbody>${monthExpenses.map(x=>{const emp=adminEmployees.find(e=>e.id===x.employee_id);return `<tr><td>${x.type==='funcionario'?'FUNCIONÁRIO':'OUTRO'}</td><td>${escHtml(x.description)}</td><td>${emp?escHtml(emp.full_name):'-'}</td><td><strong>${fmtBRL(x.value)}</strong></td><td><button class="task-btn task-btn-del" onclick="deleteExpense('${x.id}')">🗑</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-center"><div style="font-size:30px;margin-bottom:8px">💳</div><p>NENHUM OUTRO GASTO CADASTRADO NESTE MÊS.</p></div>`}
     </div>`;
+}
+function completeMeasurementFromExpenses(id){
+  if(!state.user || state.user.role!=='admin') return;
+  const list=migrateLegacyMeasurements(); const i=list.findIndex(x=>x.id===id); if(i<0)return;
+  if(!confirm('CONCLUIR ESTA MEDIÇÃO? ELA SERÁ MOVIDA PARA GASTO DO MÊS.'))return;
+  const now=new Date().toISOString(); list[i]={...list[i],status:'concluida',completed_at:now,updated_at:now};
+  setMVLocal(MV_MEASUREMENTS_KEY,list); showToast('MEDIÇÃO CONCLUÍDA E LANÇADA NO GASTO DO MÊS!'); renderAdminPage('gastos');
 }
 function openExpenseModal(){
   const emps=sortByFirst(adminEmployees.filter(e=>e.status==='ativo'));
   openModal('NOVO GASTO',`
-    <div class="field"><label>TIPO DE GASTO *</label><select id="exp-type" onchange="toggleExpenseEmployee()"><option value="medicao">MEDIÇÃO</option><option value="funcionario">PAGAMENTO DE FUNCIONÁRIO</option><option value="outro">OUTRO GASTO</option></select></div>
-    <div class="field hidden" id="exp-emp-field"><label>FUNCIONÁRIO *</label><select id="exp-emp"><option value="">— SELECIONE —</option>${emps.map(e=>`<option value="${e.id}">${escHtml(e.full_name)}</option>`).join('')}</select></div>
-    <div class="field"><label>DESCRIÇÃO *</label><input id="exp-desc" placeholder="EX: MEDIÇÃO DA OBRA / PAGAMENTO SEMANAL"></div>
+    <div class="field"><label>TIPO DE GASTO *</label><select id="exp-type" onchange="toggleExpenseEmployee()"><option value="funcionario">PAGAMENTO DE FUNCIONÁRIO</option><option value="outro">OUTRO GASTO</option></select></div>
+    <div class="field" id="exp-emp-field"><label>FUNCIONÁRIO *</label><select id="exp-emp"><option value="">— SELECIONE —</option>${emps.map(e=>`<option value="${e.id}">${escHtml(e.full_name)}</option>`).join('')}</select></div>
+    <div class="field"><label>DESCRIÇÃO *</label><input id="exp-desc" placeholder="EX: PAGAMENTO SEMANAL / MATERIAL"></div>
     <div class="field"><label>VALOR *</label><input id="exp-value" type="text" inputmode="numeric" placeholder="R$0,00" oninput="formatBRLInput(this)"></div>
+    <div style="font-size:10px;line-height:1.55;color:var(--muted);background:#F5F8FF;border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;margin-bottom:14px">MEDIÇÕES DEVEM SER CADASTRADAS EXCLUSIVAMENTE NA ABA <strong>MEDIÇÕES</strong>.</div>
     <div id="exp-err" class="err-box hidden"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveExpense()">SALVAR GASTO</button></div>`);
 }
@@ -1926,6 +2044,7 @@ input::placeholder,textarea::placeholder{ text-transform:uppercase; }
 async function init(){
   try {
     showScreen('login');
+    await hydrateNeonModules();
     await loadEmployees();
   } catch(e){
     document.getElementById('app-loading').innerHTML = '<div style="color:#fff;font-size:16px;text-align:center;padding:20px">Erro ao iniciar: '+e.message+'<br><button onclick="init()" style="margin-top:16px;padding:10px 20px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;cursor:pointer;">Tentar novamente</button></div>';
