@@ -859,7 +859,7 @@ const DEFAULT_ACCESS_PASSWORD = '1234';
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let state = { user:null, emp:null, directors:[], employees:[], adminPage:'efetivo', empTab:'presenca', selEmp:null, efeitoInterval:null };
 
-// ─── API NEON (via backend Vercel; credencial nunca fica no navegador) ─────
+// ─── API SUPABASE (via backend Vercel; credencial nunca fica no navegador) ─────
 async function apiReq(method, table, params, body){
   const url = new URL(API+'/'+table, location.origin);
   if(params) Object.keys(params).forEach(k=>url.searchParams.set(k,String(params[k])));
@@ -893,16 +893,7 @@ function setMVLocal(key,val){
   const map={mv_local_tools_v1:'mv_tools',mv_local_expenses_v1:'mv_expenses',mv_local_measurements_v1:'mv_measurements'};
   if(map[key]) fetch('/api/sync/'+map[key],{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)}).catch(console.error);
 }
-async function hydrateNeonModules(){
-  const defs=[['mv_local_tools_v1','mv_tools'],['mv_local_expenses_v1','mv_expenses'],['mv_local_measurements_v1','mv_measurements']];
-  for(const [key,table] of defs){
-    try{
-      const rows=await dbGet(table,{order:'created_at.desc'});
-      const mapped=(rows||[]).map(x=>table==='mv_tools'?{...x,code:x.identification||''}:table==='mv_expenses'?{...x,type:x.category,created_at:x.expense_date?x.expense_date+'T12:00:00':x.created_at}:x);
-      localStorage.setItem(key,JSON.stringify(mapped));
-    }catch(e){ console.error('NEON HYDRATE',table,e); }
-  }
-}
+async function hydrateSupabaseModules(){ return true; }
 
 
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1408,9 +1399,9 @@ const MV_TOOLS_KEY='mv_local_tools_v1';
 const MV_EXPENSES_KEY='mv_local_expenses_v1';
 const MV_MEASUREMENTS_KEY='mv_local_measurements_v1';
 
-function renderFerramentas(container){
+async function renderFerramentas(container){
   if(!state.user || state.user.role!=='admin') return;
-  const tools=getMVLocal(MV_TOOLS_KEY).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const tools=(await dbGet('mv_tools',{order:'created_at.desc'})).map(x=>({...x,code:x.identification||''}));
   const counts={ativa:0,desativada:0,conserto:0}; tools.forEach(t=>counts[t.status]=(counts[t.status]||0)+1);
   container.innerHTML=`
     <div class="module-head">
@@ -1431,8 +1422,13 @@ function renderFerramentas(container){
       </div>`).join('')}</div>`:`<div class="card empty-center"><div style="font-size:32px;margin-bottom:8px">🛠️</div><p>NENHUMA FERRAMENTA CADASTRADA.</p></div>`}`;
 }
 
-function openToolModal(id){
-  const tools=getMVLocal(MV_TOOLS_KEY); const t=tools.find(x=>x.id===id)||{};
+async function openToolModal(id){
+  let t={};
+  if(id){
+    const rows=await dbGet('mv_tools',{id:'eq.'+id,limit:1});
+    t=rows[0]||{};
+    t.code=t.identification||'';
+  }
   openModal(id?'EDITAR FERRAMENTA':'NOVA FERRAMENTA',`
     <div class="field"><label>NOME DA FERRAMENTA *</label><input id="tool-name" value="${escHtml(t.name||'')}" placeholder="EX: MARTELETE"></div>
     <div class="field"><label>IDENTIFICAÇÃO / PATRIMÔNIO</label><input id="tool-code" value="${escHtml(t.code||'')}" placeholder="EX: MV-001"></div>
@@ -1441,22 +1437,24 @@ function openToolModal(id){
     <div id="tool-err" class="err-box hidden"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveTool('${id||''}')">SALVAR</button></div>`);
 }
-function saveTool(id){
+async function saveTool(id){
   if(!state.user || state.user.role!=='admin') return;
   const name=document.getElementById('tool-name').value.trim().toUpperCase();
   const code=document.getElementById('tool-code').value.trim().toUpperCase();
   const status=document.getElementById('tool-status').value;
   const observation=document.getElementById('tool-obs').value.trim().toUpperCase();
-  const er=document.getElementById('tool-err'); if(!name){er.textContent='INFORME O NOME DA FERRAMENTA.';er.classList.remove('hidden');return;}
-  const list=getMVLocal(MV_TOOLS_KEY); const now=new Date().toISOString();
-  if(id){const i=list.findIndex(x=>x.id===id); if(i>=0)list[i]={...list[i],name,code,status,observation,updated_at:now};}
-  else list.push({id:'tool_'+Date.now(),name,code,status,observation,created_at:now,updated_at:now});
-  setMVLocal(MV_TOOLS_KEY,list); closeModal(); showToast('FERRAMENTA SALVA!'); renderAdminPage('ferramentas');
+  const er=document.getElementById('tool-err');
+  if(!name){er.textContent='INFORME O NOME DA FERRAMENTA.';er.classList.remove('hidden');return;}
+  const payload={name,identification:code,status,observation};
+  if(id) await dbPatch('mv_tools',{id:'eq.'+id},payload);
+  else await dbPost('mv_tools',payload);
+  closeModal(); showToast('FERRAMENTA SALVA!'); renderAdminPage('ferramentas');
 }
-function deleteTool(id){
+async function deleteTool(id){
   if(!state.user || state.user.role!=='admin') return;
   if(!confirm('EXCLUIR ESTA FERRAMENTA?'))return;
-  setMVLocal(MV_TOOLS_KEY,getMVLocal(MV_TOOLS_KEY).filter(x=>x.id!==id)); showToast('FERRAMENTA EXCLUÍDA.'); renderAdminPage('ferramentas');
+  await dbDelete('mv_tools',{id:'eq.'+id});
+  showToast('FERRAMENTA EXCLUÍDA.'); renderAdminPage('ferramentas');
 }
 
 // ── MEDIÇÕES + GASTOS (FLUXO OBRIGATÓRIO) ────────────────────────────────
@@ -1490,9 +1488,9 @@ function migrateLegacyMeasurements(){
   return measurements;
 }
 
-function renderMedicoes(container){
+async function renderMedicoes(container){
   if(!state.user || state.user.role!=='admin') return;
-  const measurements=migrateLegacyMeasurements().sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const measurements=(await dbGet('mv_measurements',{order:'created_at.desc'})).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
   const pending=measurements.filter(x=>x.status==='pendente');
   const concluded=measurements.filter(x=>x.status==='concluida');
   const month=currentMonthKey();
@@ -1512,9 +1510,13 @@ function renderMedicoes(container){
     </div>`;
 }
 
-function openMeasurementModal(id){
+async function openMeasurementModal(id){
   if(!state.user || state.user.role!=='admin') return;
-  const list=migrateLegacyMeasurements(); const m=list.find(x=>x.id===id)||{};
+  let m={};
+  if(id){
+    const rows=await dbGet('mv_measurements',{id:'eq.'+id,limit:1});
+    m=rows[0]||{};
+  }
   openModal(id?'EDITAR MEDIÇÃO':'NOVA MEDIÇÃO',`
     <div class="field"><label>DESCRIÇÃO DA MEDIÇÃO *</label><input id="med-desc" value="${escHtml(m.description||'')}" placeholder="EX: MEDIÇÃO OBRA VILA OLÍMPIA"></div>
     <div class="field"><label>VALOR *</label><input id="med-value" type="text" inputmode="numeric" value="${m.value?fmtBRL(m.value):''}" placeholder="R$0,00" oninput="formatBRLInput(this)"></div>
@@ -1523,43 +1525,41 @@ function openMeasurementModal(id){
     <div id="med-err" class="err-box hidden"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveMeasurement('${id||''}')">SALVAR</button></div>`);
 }
-function saveMeasurement(id){
+async function saveMeasurement(id){
   if(!state.user || state.user.role!=='admin') return;
   const description=document.getElementById('med-desc').value.trim().toUpperCase();
   const value=parseBRLInput(document.getElementById('med-value').value);
   const status=document.getElementById('med-status').value;
   const er=document.getElementById('med-err');
   if(!description||value<=0){er.textContent='PREENCHA A DESCRIÇÃO E UM VALOR VÁLIDO.';er.classList.remove('hidden');return;}
-  const list=migrateLegacyMeasurements(); const now=new Date().toISOString();
-  if(id){
-    const i=list.findIndex(x=>x.id===id); if(i<0)return;
-    const old=list[i];
-    let completed_at=old.completed_at||null;
-    if(old.status!=='concluida'&&status==='concluida') completed_at=now;
-    if(status==='pendente') completed_at=null;
-    list[i]={...old,description,value,status,completed_at,updated_at:now};
-  } else {
-    list.push({id:'med_'+Date.now(),description,value,status,created_at:now,updated_at:now,completed_at:status==='concluida'?now:null});
-  }
-  setMVLocal(MV_MEASUREMENTS_KEY,list); closeModal(); showToast(status==='pendente'?'MEDIÇÃO SALVA COMO FUTURO GASTO!':'MEDIÇÃO CONCLUÍDA E LANÇADA NO GASTO DO MÊS!'); renderAdminPage('medicoes');
+  const now=new Date().toISOString();
+  const payload={description,value,status,completed_at:status==='concluida'?now:null,updated_at:now};
+  if(id) await dbPatch('mv_measurements',{id:'eq.'+id},payload);
+  else await dbPost('mv_measurements',{...payload,created_at:now});
+  closeModal(); showToast(status==='pendente'?'MEDIÇÃO SALVA COMO FUTURO GASTO!':'MEDIÇÃO CONCLUÍDA E LANÇADA NO GASTO DO MÊS!'); renderAdminPage('medicoes');
 }
-function completeMeasurement(id){
+async function completeMeasurement(id){
   if(!state.user || state.user.role!=='admin') return;
-  const list=migrateLegacyMeasurements(); const i=list.findIndex(x=>x.id===id); if(i<0)return;
   if(!confirm('CONCLUIR ESTA MEDIÇÃO? O VALOR SAIRÁ DE FUTUROS GASTOS E ENTRARÁ NO GASTO DO MÊS.'))return;
-  const now=new Date().toISOString(); list[i]={...list[i],status:'concluida',completed_at:now,updated_at:now};
-  setMVLocal(MV_MEASUREMENTS_KEY,list); showToast('MEDIÇÃO CONCLUÍDA! VALOR MOVIDO PARA GASTO DO MÊS.'); renderAdminPage('medicoes');
+  const now=new Date().toISOString();
+  await dbPatch('mv_measurements',{id:'eq.'+id},{status:'concluida',completed_at:now,updated_at:now});
+  showToast('MEDIÇÃO CONCLUÍDA! VALOR MOVIDO PARA GASTO DO MÊS.'); renderAdminPage('medicoes');
 }
-function deleteMeasurement(id){
+async function deleteMeasurement(id){
   if(!state.user || state.user.role!=='admin') return;
   if(!confirm('EXCLUIR ESTA MEDIÇÃO?'))return;
-  setMVLocal(MV_MEASUREMENTS_KEY,migrateLegacyMeasurements().filter(x=>x.id!==id)); showToast('MEDIÇÃO EXCLUÍDA.'); renderAdminPage('medicoes');
+  await dbDelete('mv_measurements',{id:'eq.'+id});
+  showToast('MEDIÇÃO EXCLUÍDA.'); renderAdminPage('medicoes');
 }
 
-function renderGastos(container){
+async function renderGastos(container){
   if(!state.user || state.user.role!=='admin') return;
-  const expenses=getMVLocal(MV_EXPENSES_KEY).filter(x=>x.type!=='medicao').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
-  const measurements=migrateLegacyMeasurements();
+  const [expenseRows,measurementRows]=await Promise.all([
+    dbGet('mv_expenses',{order:'expense_date.desc'}),
+    dbGet('mv_measurements',{order:'created_at.desc'})
+  ]);
+  const expenses=(expenseRows||[]).map(x=>({...x,type:x.category,created_at:x.expense_date?x.expense_date+'T12:00:00':x.created_at})).filter(x=>x.type!=='medicao').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const measurements=measurementRows||[];
   const month=currentMonthKey();
   const pendingMeasurements=measurements.filter(x=>x.status==='pendente');
   const monthMeasurements=measurements.filter(x=>x.status==='concluida'&&mvMonthKey(x.completed_at)===month);
@@ -1592,12 +1592,12 @@ function renderGastos(container){
       ${monthExpenses.length?`<div class="expense-scroll"><table class="expense-table"><thead><tr><th>TIPO</th><th>DESCRIÇÃO</th><th>FUNCIONÁRIO</th><th>VALOR</th><th></th></tr></thead><tbody>${monthExpenses.map(x=>{const emp=adminEmployees.find(e=>e.id===x.employee_id);return `<tr><td>${x.type==='funcionario'?'FUNCIONÁRIO':'OUTRO'}</td><td>${escHtml(x.description)}</td><td>${emp?escHtml(emp.full_name):'-'}</td><td><strong>${fmtBRL(x.value)}</strong></td><td><button class="task-btn task-btn-del" onclick="deleteExpense('${x.id}')">🗑</button></td></tr>`}).join('')}</tbody></table></div>`:`<div class="empty-center"><div style="font-size:30px;margin-bottom:8px">💳</div><p>NENHUM OUTRO GASTO CADASTRADO NESTE MÊS.</p></div>`}
     </div>`;
 }
-function completeMeasurementFromExpenses(id){
+async function completeMeasurementFromExpenses(id){
   if(!state.user || state.user.role!=='admin') return;
-  const list=migrateLegacyMeasurements(); const i=list.findIndex(x=>x.id===id); if(i<0)return;
   if(!confirm('CONCLUIR ESTA MEDIÇÃO? ELA SERÁ MOVIDA PARA GASTO DO MÊS.'))return;
-  const now=new Date().toISOString(); list[i]={...list[i],status:'concluida',completed_at:now,updated_at:now};
-  setMVLocal(MV_MEASUREMENTS_KEY,list); showToast('MEDIÇÃO CONCLUÍDA E LANÇADA NO GASTO DO MÊS!'); renderAdminPage('gastos');
+  const now=new Date().toISOString();
+  await dbPatch('mv_measurements',{id:'eq.'+id},{status:'concluida',completed_at:now,updated_at:now});
+  showToast('MEDIÇÃO CONCLUÍDA E LANÇADA NO GASTO DO MÊS!'); renderAdminPage('gastos');
 }
 function openExpenseModal(){
   const emps=sortByFirst(adminEmployees.filter(e=>e.status==='ativo'));
@@ -1611,17 +1611,25 @@ function openExpenseModal(){
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary" onclick="closeModal()">CANCELAR</button><button class="btn btn-primary" onclick="saveExpense()">SALVAR GASTO</button></div>`);
 }
 function toggleExpenseEmployee(){const f=document.getElementById('exp-emp-field'); if(f)f.classList.toggle('hidden',document.getElementById('exp-type').value!=='funcionario');}
-function saveExpense(){
+async function saveExpense(){
   if(!state.user || state.user.role!=='admin') return;
   const type=document.getElementById('exp-type').value; const employee_id=document.getElementById('exp-emp').value;
   const description=document.getElementById('exp-desc').value.trim().toUpperCase(); const value=parseBRLInput(document.getElementById('exp-value').value); const er=document.getElementById('exp-err');
   if(!description||value<=0||(type==='funcionario'&&!employee_id)){er.textContent='PREENCHA TODOS OS CAMPOS OBRIGATÓRIOS.';er.classList.remove('hidden');return;}
-  const list=getMVLocal(MV_EXPENSES_KEY); list.push({id:'exp_'+Date.now(),type,employee_id:type==='funcionario'?employee_id:'',description,value,created_at:new Date().toISOString()});
-  setMVLocal(MV_EXPENSES_KEY,list); closeModal(); showToast('GASTO CADASTRADO!'); renderAdminPage('gastos');
+  await dbPost('mv_expenses',{
+    category:type,
+    employee_id:type==='funcionario'?employee_id:null,
+    description,
+    value,
+    expense_date:todayStr()
+  });
+  closeModal(); showToast('GASTO CADASTRADO!'); renderAdminPage('gastos');
 }
-function deleteExpense(id){
-  if(!state.user || state.user.role!=='admin') return; if(!confirm('EXCLUIR ESTE GASTO?'))return;
-  setMVLocal(MV_EXPENSES_KEY,getMVLocal(MV_EXPENSES_KEY).filter(x=>x.id!==id)); showToast('GASTO EXCLUÍDO.'); renderAdminPage('gastos');
+async function deleteExpense(id){
+  if(!state.user || state.user.role!=='admin') return;
+  if(!confirm('EXCLUIR ESTE GASTO?'))return;
+  await dbDelete('mv_expenses',{id:'eq.'+id});
+  showToast('GASTO EXCLUÍDO.'); renderAdminPage('gastos');
 }
 
 // ── RELATÓRIOS ──
@@ -2044,7 +2052,7 @@ input::placeholder,textarea::placeholder{ text-transform:uppercase; }
 async function init(){
   try {
     showScreen('login');
-    await hydrateNeonModules();
+    await hydrateSupabaseModules();
     await loadEmployees();
   } catch(e){
     document.getElementById('app-loading').innerHTML = '<div style="color:#fff;font-size:16px;text-align:center;padding:20px">Erro ao iniciar: '+e.message+'<br><button onclick="init()" style="margin-top:16px;padding:10px 20px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;cursor:pointer;">Tentar novamente</button></div>';
