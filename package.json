@@ -1,1 +1,6 @@
-{"name":"mv-instalacoes-neon","version":"1.0.0","private":true,"type":"module","dependencies":{"@neondatabase/serverless":"latest"}}
+{
+  "name": "mv-instalacoes-supabase",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module"
+}
