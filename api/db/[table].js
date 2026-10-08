@@ -51,9 +51,9 @@ async function supabaseRequest(table, method='GET', params=null, body=undefined,
   const url=base+'/rest/v1/'+encodeURIComponent(table)+(params&&String(params)?'?'+params.toString():'');
   const headers={
     'apikey':key,
-    'Authorization':'Bearer '+key,
     'Content-Type':'application/json'
   };
+  if(!String(key).startsWith('sb_')) headers['Authorization']='Bearer '+key;
 
   if(method==='POST' || method==='PATCH'){
     headers['Prefer']=returning?'return=representation':'return=minimal';
